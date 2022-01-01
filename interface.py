@@ -1,15 +1,15 @@
 from datetime import date
 from datetime import datetime
-from dash import dcc
+from dash import dash_table as dt, dcc
 from dash import html
+from dash.dash_table.Format import Format, Symbol
 from dash.dependencies import Input, Output, State
 import dash
 import json
 import pandas as pd
 
-
 app = dash.Dash(__name__)
-transactionsDf = pd.read_csv('data.csv').convert_dtypes()
+transactionsDf = pd.read_csv('data.csv')
 
 # TODO: add last 4 digits to make unique
 # TODO: add json validation
@@ -32,10 +32,34 @@ app.layout = html.Div(
         dcc.Dropdown(id='Account', options=accountOptions),
         dcc.Input(id="Amount", type="number", placeholder="Amount"),
         dcc.Dropdown(id='Category', options=categoryOptions),
-        dcc.Dropdown(id='Sub-Category', options=[]),
+        dcc.Dropdown(id='Subcategory', options=[]),
         dcc.Input(id="Notes", type="text", placeholder="Notes"),
         html.Br(),
         html.Button('Add', id='Add'),
+        html.Br(),
+        dt.DataTable(
+            id='RecentRows',
+            columns=[
+                {'name': 'Date', 'id': 'Date', 'type': 'datetime'},
+                {'name': 'Store', 'id': 'Store', 'type': 'text'},
+                {'name': 'Description', 'id': 'Description', 'type': 'text'},
+                {'name': 'Account', 'id': 'Account', 'type': 'text'},
+                {'name': 'Amount', 'id': 'Amount', 'type': 'numeric', 'format': Format(symbol=Symbol.yes).scheme('f').precision(2)},
+                {'name': 'Category', 'id': 'Category', 'type': 'text'},
+                {'name': 'Subcategory', 'id': 'Subcategory', 'type': 'text'},
+                {'name': 'Notes', 'id': 'Notes', 'type': 'text'}
+            ],
+            style_cell={'textAlign': 'left'},
+            style_cell_conditional=[
+                {
+                    'if': {'column_id': 'Amount'},
+                    'textAlign': 'right'
+                }
+            ],
+            editable=True,
+            style_as_list_view=True,
+            data=transactionsDf.tail(10).to_dict('records')
+        ),
         html.Br(),
         html.Div(id='TempMessage'),
         html.Br(),
@@ -48,7 +72,7 @@ app.layout = html.Div(
 )
 
 @app.callback(
-    Output('Sub-Category', 'options'),
+    Output('Subcategory', 'options'),
     Input('Category', "value"),
 )
 def set_sub_category(Category):
@@ -65,10 +89,10 @@ def set_sub_category(Category):
     Input('Account', "value"),
     Input('Amount', "value"),
     Input('Category', "value"),
-    Input('Sub-Category', "value"),
+    Input('Subcategory', "value"),
     Input('Notes', "value"),
 )
-def temp_message(Date, Store, Description, Account, Amount, Category, Sub_Category, Notes):
+def temp_message(Date, Store, Description, Account, Amount, Category, Subcategory, Notes):
     dateStr = 'None'
     if Date is not None:
         date_object = datetime.strptime(Date, "%Y-%m-%d")
@@ -86,7 +110,7 @@ def temp_message(Date, Store, Description, Account, Amount, Category, Sub_Catego
         html.Br(),
         f'Category: {Category}',
         html.Br(),
-        f'Sub-Category: {Sub_Category}',
+        f'Subcategory: {Subcategory}',
         html.Br(),
         f'Notes: {Notes}'
     ])
@@ -100,10 +124,10 @@ def temp_message(Date, Store, Description, Account, Amount, Category, Sub_Catego
     State('Account', "value"),
     State('Amount', "value"),
     State('Category', "value"),
-    State('Sub-Category', "value"),
+    State('Subcategory', "value"),
     State('Notes', "value")
 )
-def add(Add, Date, Store, Description, Account, Amount, Category, Sub_Category, Notes):
+def add(Add, Date, Store, Description, Account, Amount, Category, Subcategory, Notes):
     if Add is not None:
         newRow = {
             'Date': datetime.strptime(Date, "%Y-%m-%d").strftime('%d-%b-%C'),
@@ -112,7 +136,7 @@ def add(Add, Date, Store, Description, Account, Amount, Category, Sub_Category, 
             'Account': Account,
             'Amount': Amount,
             'Category': Category,
-            'Subcategory': Sub_Category,
+            'Subcategory': Subcategory,
             'Notes': Notes,
         }
         new.append(newRow)
