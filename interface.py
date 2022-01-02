@@ -1,3 +1,4 @@
+"""UI for bookkeeping."""
 from dash import dash_table as dt, dcc
 from dash import html
 from dash.dash_table.Format import Format, Symbol
@@ -9,14 +10,14 @@ import pandas as pd
 
 app = dash.Dash(__name__)
 transactionsDf = pd.read_csv('data.csv')
-transactionsDfColumns = transactionsDf.columns
 
 # TODO: add last 4 digits to make unique
 # TODO: add json validation
 config = json.load(open('config.json'))
 accountOptions = [{'label': account, 'value': account} for account in config['Accounts']]
 categoryOptions = [{'label': category, 'value': category} for category in config['Categories']]
-subcategoryOptions = {category:config['Categories'][category]['Subcategories'] for category in config['Categories']}
+subcategoryOptions = {category: config['Categories'][category]['Subcategories']
+                      for category in config['Categories']}
 
 # TODO: fix layout
 # TODO: add chart to view old items
@@ -47,7 +48,11 @@ app.layout = html.Div(
                 {'name': 'Store', 'id': 'Store', 'type': 'text'},
                 {'name': 'Description', 'id': 'Description', 'type': 'text'},
                 {'name': 'Account', 'id': 'Account', 'type': 'text'},
-                {'name': 'Amount', 'id': 'Amount', 'type': 'numeric', 'format': Format(symbol=Symbol.yes).scheme('f').precision(2)},
+                {
+                    'name': 'Amount',
+                    'id': 'Amount',
+                    'type': 'numeric',
+                    'format': Format(symbol=Symbol.yes).scheme('f').precision(2)},
                 {'name': 'Category', 'id': 'Category', 'type': 'text'},
                 {'name': 'Subcategory', 'id': 'Subcategory', 'type': 'text'},
                 {'name': 'Notes', 'id': 'Notes', 'type': 'text'}
@@ -76,7 +81,7 @@ app.layout = html.Div(
                     'backgroundColor': 'orangered'
                 }
             ],
-            editable=False, # No validation in table
+            editable=False,  # No validation in table
             row_deletable=True,
             page_size=20,
             style_as_list_view=True,
@@ -89,15 +94,19 @@ app.layout = html.Div(
     ]
 )
 
+
 @app.callback(
     Output('Subcategory', 'options'),
     Input('Category', "value"),
 )
 def set_sub_category(Category):
+    """Update allowed subcategories according to selected category."""
     if Category is None:
         return []
     else:
-        return [{'label': subcategory, 'value': subcategory} for subcategory in subcategoryOptions[Category]]
+        return [{'label': subcategory, 'value': subcategory}
+                for subcategory in subcategoryOptions[Category]]
+
 
 @app.callback(
     Output('AddedRows', 'data'),
@@ -124,18 +133,23 @@ def set_sub_category(Category):
     prevent_initial_call=True
 )
 def add_or_write(
-    add,
-    write,
-    data,
-    account,
-    date,
-    store,
-    description,
-    amount,
-    category, 
-    subcategory,
-    notes):
-    
+        add,
+        write,
+        data,
+        account,
+        date,
+        store,
+        description,
+        amount,
+        category,
+        subcategory,
+        notes):
+    """
+    Add or write entered changes.
+
+    Add a new row or write the rows of displayed changes to the backing DataFrame
+    and csv file. Since both modify the DataTable we must use the same callback
+    """
     # Get the trigger
     trigger = dash.callback_context.triggered[0]['prop_id']
 
@@ -152,15 +166,18 @@ def add_or_write(
             'Notes': notes,
         }
         data.append(newRow)
-        return (data, datetime.date.today(), '', '', None, None, None, '', f'Added {len(data)} rows', '')
+        return (data, datetime.date.today(), '', '', None,
+                None, None, '', f'Added {len(data)} rows', '')
 
-    # If writing then we write to the main DataFrame, write to file, and clear the DataTable
+    # If writing then we write to the main DataFrame, write to file,
+    # and clear the DataTablessss
     if trigger == 'Write.n_clicks':
 
         # Write to main DataFrame and backing file
         global transactionsDf
         numChanges = len(data)
-        transactionsDf = transactionsDf.append(data, ignore_index=True, sort=False)
+        transactionsDf = transactionsDf.append(
+            data, ignore_index=True, sort=False)
         transactionsDf.sort_values(by=['Date', 'Account'], inplace=True)
         transactionsDf.to_csv('data.csv', index=False)
         data.clear()
@@ -169,10 +186,13 @@ def add_or_write(
         totalStrs = []
         for account in sorted(map(lambda x: x['label'], accountOptions)):
             accountTransactions = transactionsDf[transactionsDf['Account'] == account]
-            totalStrs.append(f'{account}: {round(sum(accountTransactions["Amount"]), 2)}')
+            totalStrs.append(
+                f'{account}: {round(sum(accountTransactions["Amount"]), 2)}')
             totalStrs.append(html.Br())
 
-        return (data, date, store, description, amount, category, subcategory, notes, f'Wrote {numChanges} rows', html.P(totalStrs))
+        return (data, date, store, description, amount, category, subcategory,
+                notes, f'Wrote {numChanges} rows', html.P(totalStrs))
+
 
 if __name__ == "__main__":
 
