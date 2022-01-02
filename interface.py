@@ -1,15 +1,15 @@
-from datetime import date
-from datetime import datetime
 from dash import dash_table as dt, dcc
 from dash import html
 from dash.dash_table.Format import Format, Symbol
 from dash.dependencies import Input, Output, State
 import dash
+import datetime
 import json
 import pandas as pd
 
 app = dash.Dash(__name__)
 transactionsDf = pd.read_csv('data.csv')
+transactionsDfColumns = transactionsDf.columns
 
 # TODO: add last 4 digits to make unique
 # TODO: add json validation
@@ -17,19 +17,20 @@ config = json.load(open('config.json'))
 accountOptions = [{'label': account, 'value': account} for account in config['Accounts']]
 categoryOptions = [{'label': category, 'value': category} for category in config['Categories']]
 subcategoryOptions = {category:config['Categories'][category]['Subcategories'] for category in config['Categories']}
-new = []
 
+# TODO: fix layout
+# TODO: add chart to view old items
 app.layout = html.Div(
     [
+        dcc.Dropdown(id='Account', options=accountOptions),
         dcc.DatePickerSingle(
             id='Date',
-            min_date_allowed=date(2020, 1, 1),
-            max_date_allowed=date(2025, 12, 31),
-            date=date(2021, 11, 4)
+            min_date_allowed=datetime.date(2020, 1, 1),
+            max_date_allowed=datetime.date(2025, 12, 31),
+            date=datetime.date(2021, 11, 4)
         ),
         dcc.Input(id="Store", type="text", placeholder="Store"),
         dcc.Input(id="Description", type="text", placeholder="Description"),
-        dcc.Dropdown(id='Account', options=accountOptions),
         dcc.Input(id="Amount", type="number", placeholder="Amount"),
         dcc.Dropdown(id='Category', options=categoryOptions),
         dcc.Dropdown(id='Subcategory', options=[]),
@@ -37,8 +38,10 @@ app.layout = html.Div(
         html.Br(),
         html.Button('Add', id='Add'),
         html.Br(),
+        html.Br(),
+        html.Big('Changes Preview'),
         dt.DataTable(
-            id='RecentRows',
+            id='AddedRows',
             columns=[
                 {'name': 'Date', 'id': 'Date', 'type': 'datetime'},
                 {'name': 'Store', 'id': 'Store', 'type': 'text'},
@@ -50,23 +53,38 @@ app.layout = html.Div(
                 {'name': 'Notes', 'id': 'Notes', 'type': 'text'}
             ],
             style_cell={'textAlign': 'left'},
-            style_cell_conditional=[
+            style_data_conditional=[
                 {
+                    # Only align numbers right
                     'if': {'column_id': 'Amount'},
                     'textAlign': 'right'
+                },
+                {
+                    # Green for income
+                    'if': {
+                        'column_id': 'Amount',
+                        'filter_query': '{Amount} > 0'
+                    },
+                    'backgroundColor': 'yellowgreen'
+                },
+                {
+                    # Red for spending
+                    'if': {
+                        'column_id': 'Amount',
+                        'filter_query': '{Amount} < 0'
+                    },
+                    'backgroundColor': 'orangered'
                 }
             ],
-            editable=True,
+            editable=False, # No validation in table
+            row_deletable=True,
+            page_size=20,
             style_as_list_view=True,
-            data=transactionsDf.tail(10).to_dict('records')
+            data=[]
         ),
         html.Br(),
-        html.Div(id='TempMessage'),
-        html.Br(),
-        html.Div(id='AddedSoFar'),
-        html.Br(),
         html.Button('Write', id='Write'),
-        html.Div(id='WriteStatus'),
+        html.Div('No changes yet', id='WriteStatus'),
         html.Div(id='Totals'),
     ]
 )
@@ -82,88 +100,79 @@ def set_sub_category(Category):
         return [{'label': subcategory, 'value': subcategory} for subcategory in subcategoryOptions[Category]]
 
 @app.callback(
-    Output('TempMessage', 'children'),
-    Input('Date', "date"),
-    Input('Store', "value"),
-    Input('Description', "value"),
-    Input('Account', "value"),
-    Input('Amount', "value"),
-    Input('Category', "value"),
-    Input('Subcategory', "value"),
-    Input('Notes', "value"),
-)
-def temp_message(Date, Store, Description, Account, Amount, Category, Subcategory, Notes):
-    dateStr = 'None'
-    if Date is not None:
-        date_object = datetime.strptime(Date, "%Y-%m-%d")
-        dateStr = date_object.strftime('%B %d, %Y')
-    return html.P([
-        f'Date: {dateStr}',
-        html.Br(),
-        f'Store: {Store}',
-        html.Br(),
-        f'Description: {Description}',
-        html.Br(),
-        f'Account: {Account}',
-        html.Br(),
-        f'Amount: {Amount}',
-        html.Br(),
-        f'Category: {Category}',
-        html.Br(),
-        f'Subcategory: {Subcategory}',
-        html.Br(),
-        f'Notes: {Notes}'
-    ])
-
-@app.callback(
-    Output('AddedSoFar', 'children'),
-    Input('Add', 'n_clicks'),
-    State('Date', "date"),
-    State('Store', "value"),
-    State('Description', "value"),
-    State('Account', "value"),
-    State('Amount', "value"),
-    State('Category', "value"),
-    State('Subcategory', "value"),
-    State('Notes', "value")
-)
-def add(Add, Date, Store, Description, Account, Amount, Category, Subcategory, Notes):
-    if Add is not None:
-        newRow = {
-            'Date': datetime.strptime(Date, "%Y-%m-%d").strftime('%d-%b-%C'),
-            'Store': Store,
-            'Description': Description,
-            'Account': Account,
-            'Amount': Amount,
-            'Category': Category,
-            'Subcategory': Subcategory,
-            'Notes': Notes,
-        }
-        new.append(newRow)
-        return f'Added {len(new)} rows so far {newRow}'
-    else:
-        return f'No new rows yet'
-
-@app.callback(
+    Output('AddedRows', 'data'),
+    Output('Date', 'date'),
+    Output('Store', 'value'),
+    Output('Description', 'value'),
+    Output('Amount', 'value'),
+    Output('Category', 'value'),
+    Output('Subcategory', 'value'),
+    Output('Notes', 'value'),
     Output('WriteStatus', 'children'),
     Output('Totals', 'children'),
-    Input('Write', 'n_clicks')
+    Input('Add', 'n_clicks'),
+    Input('Write', 'n_clicks'),
+    State('AddedRows', 'data'),
+    State('Account', 'value'),
+    State('Date', 'date'),
+    State('Store', 'value'),
+    State('Description', 'value'),
+    State('Amount', 'value'),
+    State('Category', 'value'),
+    State('Subcategory', 'value'),
+    State('Notes', 'value'),
+    prevent_initial_call=True
 )
-def write(Write):
-    if Write is None:
-        return ('Have not written to disk yet', '')
-    else:
-        global transactionsDf
-        transactionsDf = transactionsDf.append(new, ignore_index=True, sort=False)
-        transactionsDf.to_csv('data.csv', index=False)
-        new.clear()
+def add_or_write(
+    add,
+    write,
+    data,
+    account,
+    date,
+    store,
+    description,
+    amount,
+    category, 
+    subcategory,
+    notes):
+    
+    # Get the trigger
+    trigger = dash.callback_context.triggered[0]['prop_id']
 
+    # If adding a row we return the new data to the DataTable
+    if trigger == 'Add.n_clicks':
+        newRow = {
+            'Date': date,
+            'Store': store,
+            'Description': description,
+            'Account': account,
+            'Amount': amount,
+            'Category': category,
+            'Subcategory': subcategory,
+            'Notes': notes,
+        }
+        data.append(newRow)
+        return (data, datetime.date.today(), '', '', None, None, None, '', f'Added {len(data)} rows', '')
+
+    # If writing then we write to the main DataFrame, write to file, and clear the DataTable
+    if trigger == 'Write.n_clicks':
+
+        # Write to main DataFrame and backing file
+        global transactionsDf
+        numChanges = len(data)
+        transactionsDf = transactionsDf.append(data, ignore_index=True, sort=False)
+        transactionsDf.sort_values(by=['Date', 'Account'], inplace=True)
+        transactionsDf.to_csv('data.csv', index=False)
+        data.clear()
+
+        # Calculate new totals
         totalStrs = []
         for account in sorted(map(lambda x: x['label'], accountOptions)):
             accountTransactions = transactionsDf[transactionsDf['Account'] == account]
             totalStrs.append(f'{account}: {round(sum(accountTransactions["Amount"]), 2)}')
             totalStrs.append(html.Br())
-        return ('Written to disk', html.P(totalStrs))
+
+        return (data, date, store, description, amount, category, subcategory, notes, f'Wrote {numChanges} rows', html.P(totalStrs))
 
 if __name__ == "__main__":
 
