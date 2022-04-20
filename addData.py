@@ -9,15 +9,14 @@ import datetime
 import json
 import operator
 import pandas as pd
-import Utils
 
 app = dash.Dash(__name__)
 
 # Get configuration items
 with open('config.json') as f:
-    config = json.load(open('config.json'))
+    config = json.load(f)
     path = config['Paths']['Statement Root']
-    data = config['Paths']['Transactions csv']
+    transactions_csv = config['Paths']['Transactions csv']
     category_options = [{'label': category, 'value': category} for category in config['Categories']]
     category_options = sorted(category_options, key=operator.itemgetter('label'))
 
@@ -47,7 +46,12 @@ app.layout = html.Div(
                     'editable': False,
                 },
                 {'name': 'Category', 'id': 'category', 'type': 'text', 'presentation': 'dropdown'},
-                {'name': 'Subcategory', 'id': 'subcategory', 'type': 'text', 'presentation': 'dropdown'},
+                {
+                    'name': 'Subcategory',
+                    'id': 'subcategory',
+                    'type': 'text',
+                    'presentation': 'dropdown'
+                },
                 {'name': 'Notes', 'id': 'notes', 'type': 'text'}
             ],
             style_cell={'textAlign': 'left'},
@@ -110,9 +114,9 @@ app.layout = html.Div(
 )
 def import_or_write(import_statement, write, entries, min_date):
     """
-    Import statements or persist entered changes.
+    Import statements or persist entered changes
 
-    Create new editable entries that can be persisted in to the backing csv file.
+    Create new editable entries that can be persisted in to the backing csv file
 
     :param import_statement: (unused) Button info for the import-statement button
     :param write: (unused) Button info for the write button
@@ -142,26 +146,26 @@ def import_statements_to_table(min_date: str):
 
     # Get relevant files
     min_date_as_date = datetime.datetime.strptime(min_date, '%Y-%m-%d')
-    files = Utils.find_files(path, min_date_as_date)
+    files = find_files(path, min_date_as_date)
 
     # Get all entries
     data = []
     for filename in files:
-        account_name = Utils.find_account_name(config['Accounts'], filename)
-        lines = Utils.read_pdf_to_lines(path, filename)
+        account_name = find_account_name(config['Accounts'], filename)
+        lines = read_pdf_to_lines(path, filename)
 
         # Special case for statements that don't show negative amounts
         account_info = config['Accounts'][account_name]
         negate = account_info['Type'] == 'Credit'
         if 'Negative Separator' in account_info:
             split_index = find_matching_line(lines, account_info['Negative Separator'])
-            entries = Utils.find_entries(lines[:split_index], negate)
-            entries += Utils.find_entries(lines[split_index:], not negate)
+            entries = find_entries(lines[:split_index], negate)
+            entries += find_entries(lines[split_index:], not negate)
         # Parse normally
         else:
-            entries = Utils.find_entries(lines, negate)
+            entries = find_entries(lines, negate)
 
-        Utils.add_account_to_entries(entries, account_name)
+        add_account_to_entries(entries, account_name)
         data += entries
 
     return sorted(data, key=operator.itemgetter('date', 'account'))
@@ -176,10 +180,10 @@ def append_data_to_csv(entries: list, account_options: list):
     :return: Dash html paragraph containing balances of each account
     """
 
-    transactions_df = Utils.save_entries_to_dataframe(pd.read_csv(data), entries)
-    return Utils.calculate_totals(transactions_df, account_options)
+    transactions_df = save_entries_to_dataframe(pd.read_csv(transactions_csv), entries)
+    return calculate_totals(transactions_df, account_options)
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
 
     app.run_server(debug=True)

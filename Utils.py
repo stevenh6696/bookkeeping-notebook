@@ -49,6 +49,7 @@ def find_account_name(accounts: list, filename: str):
                      filename prefixes
     :param filename: Filename to be matched with
     :return: Matched account name
+    :raises NameError: If no known account prefix matches the file name
     """
 
     for account_name in accounts:
@@ -60,7 +61,7 @@ def find_account_name(accounts: list, filename: str):
         if filename.startswith(prefix):
             return account_name
 
-    raise NameError('File path does not match any known account statement prefix')
+    raise NameError('File name does not match any known account statement prefix')
 
 
 def read_pdf_to_lines(folder: str, filename: str):
@@ -106,6 +107,7 @@ def find_entries(lines: list, reverse_amount=False):
     :param lines: Lines to be parsed for transactions
     :param reverse_amount: Whether to reverse the amount shown on the statement
     :return: list of dictionaries representing transactions
+    :raises ValueError: If no matcher matches on the transactions in the statement
     """
 
     # Find a matcher to use
@@ -138,6 +140,7 @@ def parse_date(date_string: str):
 
     :param date_string: String representing a date
     :return: datetime.date object
+    :raises ValueError: If date string cannot be parsed to datetime object
     """
 
     for format in ['%m/%d', '%b %d']:
@@ -195,7 +198,6 @@ def save_entries_to_dataframe(transactions_df: pd.DataFrame, data: list):
     transactions_df = pd.concat([transactions_df, entries_df], ignore_index=True, sort=False)
     transactions_df.sort_values(by=['date', 'account'], inplace=True)
     transactions_df.to_csv('data.csv', index=False)
-    print(transactions_df.last)
     data.clear()
 
     return transactions_df
