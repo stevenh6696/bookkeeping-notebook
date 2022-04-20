@@ -3,6 +3,7 @@ from dash import dash_table as dt, dcc
 from dash import html
 from dash.dash_table.Format import Format, Symbol
 from dash.dependencies import Input, Output, State
+from Utils import *
 import dash
 import datetime
 import json
@@ -148,7 +149,18 @@ def import_statements_to_table(min_date: str):
     for filename in files:
         account_name = Utils.find_account_name(config['Accounts'], filename)
         lines = Utils.read_pdf_to_lines(path, filename)
-        entries = Utils.find_entries(lines, config['Accounts'][account_name]['Type'] == 'Credit')
+
+        # Special case for statements that don't show negative amounts
+        account_info = config['Accounts'][account_name]
+        negate = account_info['Type'] == 'Credit'
+        if 'Negative Separator' in account_info:
+            split_index = find_matching_line(lines, account_info['Negative Separator'])
+            entries = Utils.find_entries(lines[:split_index], negate)
+            entries += Utils.find_entries(lines[split_index:], not negate)
+        # Parse normally
+        else:
+            entries = Utils.find_entries(lines, negate)
+
         Utils.add_account_to_entries(entries, account_name)
         data += entries
 

@@ -82,6 +82,23 @@ def read_pdf_to_lines(folder: str, filename: str):
     return lines
 
 
+def find_matching_line(lines: list, text: str):
+    """
+    Find the index of the line matching the given text
+
+    :param lines: Lines to match against
+    :param text: Text to match
+    :return: Index of matching line in the list
+    :raises ValueError: If no lines match the given text
+    """
+
+    for i, line in enumerate(lines):
+        if line == text:
+            return i
+
+    raise ValueError('No matching lines found')
+
+
 def find_entries(lines: list, reverse_amount=False):
     """
     Find transactions from a list of strings
